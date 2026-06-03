@@ -6,6 +6,9 @@ def main():
         sys.stdout.write("$ ")
 
         command = input()
+
+        if command == 'exit':
+            break
         print(f"{command}: command not found")
 
 
