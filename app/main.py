@@ -1,21 +1,38 @@
-import os, shutil, sys
+import os, subprocess, sys
 from pathlib import Path
 
 built_in_commands = { "echo", "exit", "type" }
+
+def find_executable(command, path_dirs):
+    for dir in path_dirs:
+        cmd_path: Path = Path(dir) / command
+        if cmd_path.is_file() and os.access(cmd_path, os.X_OK):
+            return cmd_path
+    return None
 
 def _handle_type(command):
     if command in built_in_commands:
         return f"{command} is a shell builtin\n"
     
-    path = os.environ.get("PATH")
-    path_list = path.split(os.pathsep)
+    path = find_executable(command, os.environ.get("PATH").split(os.pathsep))
 
-    for dir in path_list:
-        cmd_path: Path = Path(dir) / command
-        if cmd_path.is_file() and os.access(cmd_path, os.X_OK):
-            return f"{command} is {cmd_path}\n"
+    if path:
+        return f"{command} is {path}\n"
     
     return f"{command}: not found\n"
+
+def _handle_external_program(command):
+    args = command.split()
+    program_name = args[0]
+
+    path = find_executable(program_name, os.environ.get("PATH").split(os.pathsep))
+
+    if path:
+        subprocess.run(args)
+    else:
+        sys.stdout.write(f"{command}: command not found\n")
+    return
+
 
 def main():
     
@@ -32,7 +49,7 @@ def main():
             cmd = command[5:]
             sys.stdout.write(_handle_type(cmd))
         else:
-            sys.stdout.write(f"{command}: command not found\n")
+            _handle_external_program(command)
 
 
 if __name__ == "__main__":
