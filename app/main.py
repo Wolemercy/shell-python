@@ -37,7 +37,9 @@ def _handle_pwd():
     sys.stdout.write(f"{os.getcwd()}\n")
 
 def _handle_cd(dir):
-    if os.path.isdir(dir):
+    if dir == "~":
+        os.chdir(os.getenv("HOME"))
+    elif os.path.isdir(dir):
         os.chdir(dir)
     else:
         sys.stdout.write(f"cd: {dir}: No such file or directory\n")
