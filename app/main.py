@@ -1,7 +1,7 @@
 import os, subprocess, sys
 from pathlib import Path
 
-built_in_commands = { "echo", "exit", "type" }
+built_in_commands = { "echo", "exit", "type", "pwd" }
 
 def find_executable(command, path_dirs):
     for dir in path_dirs:
@@ -33,6 +33,9 @@ def _handle_external_program(command):
         sys.stdout.write(f"{command}: command not found\n")
     return
 
+def _handle_pwd():
+    sys.stdout.write(f"{os.getcwd()}\n")
+
 
 def main():
     
@@ -48,6 +51,8 @@ def main():
         elif command.startswith("type "):
             cmd = command[5:]
             sys.stdout.write(_handle_type(cmd))
+        elif command == "pwd":
+            _handle_pwd()
         else:
             _handle_external_program(command)
 
