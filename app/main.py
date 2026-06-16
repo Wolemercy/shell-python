@@ -1,7 +1,7 @@
 import os, subprocess, sys
 from pathlib import Path
 
-built_in_commands = { "echo", "exit", "type", "pwd" }
+built_in_commands = { "cd", "echo", "exit", "pwd", "type", }
 
 def find_executable(command, path_dirs):
     for dir in path_dirs:
@@ -36,6 +36,13 @@ def _handle_external_program(command):
 def _handle_pwd():
     sys.stdout.write(f"{os.getcwd()}\n")
 
+def _handle_cd(dir):
+    path = Path(dir)
+    if path.exists():
+        os.chdir(path)
+    else:
+        sys.stdout.write(f"cd: {dir}: No such file or directory\n")
+
 
 def main():
     
@@ -53,6 +60,8 @@ def main():
             sys.stdout.write(_handle_type(cmd))
         elif command == "pwd":
             _handle_pwd()
+        elif command.startswith("cd "):
+            _handle_cd(command[3:])
         else:
             _handle_external_program(command)
 
