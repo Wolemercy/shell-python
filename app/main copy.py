@@ -1,4 +1,4 @@
-import os, subprocess, sys, shlex
+import os, subprocess, sys
 from pathlib import Path
 
 built_in_commands = { "cd", "echo", "exit", "pwd", "type", }
@@ -22,7 +22,7 @@ def _handle_type(command):
     return f"{command}: not found\n"
 
 def _handle_external_program(command):
-    args = shlex.split(command)
+    args = _parse_args(command)
     program_name = args[0]
     
     path = find_executable(program_name, os.environ.get("PATH").split(os.pathsep))
@@ -82,7 +82,7 @@ def main():
         if command == "exit":
             break
         elif command.startswith("echo "):
-            sys.stdout.write(f"{" ".join(shlex.split(command[5:]))}\n")
+            sys.stdout.write(f"{" ".join(_parse_args(command[5:]))}\n")
         elif command.startswith("type "):
             cmd = command[5:]
             sys.stdout.write(_handle_type(cmd))
