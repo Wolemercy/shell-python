@@ -49,7 +49,7 @@ def main():
     while True:
         sys.stdout.write("$ ")
 
-        command = input()
+        command = input().strip()
 
         if command == "exit":
             break
