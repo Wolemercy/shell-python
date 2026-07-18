@@ -1,4 +1,4 @@
-import os, subprocess, sys
+import os, subprocess, sys, shlex
 from pathlib import Path
 
 built_in_commands = { "cd", "echo", "exit", "pwd", "type", }
@@ -22,7 +22,7 @@ def _handle_type(command):
     return f"{command}: not found\n"
 
 def _handle_external_program(command):
-    args = _parse_args(command)
+    args = shlex.split(command)
     program_name = args[0]
     
     path = find_executable(program_name, os.environ.get("PATH").split(os.pathsep))
@@ -44,34 +44,6 @@ def _handle_cd(dir):
     else:
         sys.stdout.write(f"cd: {dir}: No such file or directory\n")
 
-def _parse_args(args: str):
-    output: list[str] = []
-
-    arg = ""
-    i = 0
-
-    while i < len(args):
-        if args[i] == "'":
-            i += 1
-            while i < len(args) and args[i] != "'":
-                arg += args[i]
-                i += 1
-            i += 1
-        else:
-            if args[i].isspace():
-                output.append(arg)
-                arg = ""
-                while i < len(args) and args[i].isspace():
-                    i += 1
-            else:
-                arg += args[i]
-                i += 1
-    
-    if arg:
-        output.append(arg)
-                
-    return output
-
 def main():
     
     while True:
@@ -82,7 +54,7 @@ def main():
         if command == "exit":
             break
         elif command.startswith("echo "):
-            sys.stdout.write(f"{" ".join(_parse_args(command[5:]))}\n")
+            sys.stdout.write(f"{" ".join(shlex.split(command[5:]))}\n")
         elif command.startswith("type "):
             cmd = command[5:]
             sys.stdout.write(_handle_type(cmd))
