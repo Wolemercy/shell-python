@@ -1,4 +1,7 @@
-import os, subprocess, sys, shlex
+import os
+import shlex
+import subprocess
+import sys
 from pathlib import Path
 
 built_in_commands = { "cd", "echo", "exit", "pwd", "type", }
@@ -12,29 +15,27 @@ def find_executable(command, path_dirs):
 
 def _handle_type(command):
     if command in built_in_commands:
-        return f"{command} is a shell builtin\n"
+        return f"{command} is a shell builtin"
     
     path = find_executable(command, os.environ.get("PATH").split(os.pathsep))
 
     if path:
-        return f"{command} is {path}\n"
+        return f"{command} is {path}"
     
-    return f"{command}: not found\n"
+    return f"{command}: not found"
 
-def _handle_external_program(command):
-    args = shlex.split(command)
-    program_name = args[0]
+def _handle_external_program(command, args, stdout):
     
-    path = find_executable(program_name, os.environ.get("PATH").split(os.pathsep))
+    path = find_executable(command, os.environ.get("PATH").split(os.pathsep))
 
     if path:
-        subprocess.run(args)    
+        subprocess.run([command] + args, stdout=stdout)    
     else:
-        sys.stdout.write(f"{command}: command not found\n")
+        print(f"{command}: command not found")
     return
 
 def _handle_pwd():
-    sys.stdout.write(f"{os.getcwd()}\n")
+    print(os.getcwd())
 
 def _handle_cd(dir):
     if dir == "~":
@@ -42,56 +43,57 @@ def _handle_cd(dir):
     elif os.path.isdir(dir):
         os.chdir(dir)
     else:
-        sys.stdout.write(f"cd: {dir}: No such file or directory\n")
+        print(f"cd: {dir}: No such file or directory")
 
-def _parse_args(args: str):
-    output: list[str] = []
+def _split_command_args(raw_input: str):
+    args = shlex.split(raw_input)
+    return args[0], args[1:]
 
-    arg = ""
-    i = 0
+def get_stdout_delim_index(args: list[str]) -> int:
+    if ">" in args:
+        return args.index(">")
+    if "1>" in args:
+        return args.index("1>")
 
-    while i < len(args):
-        if args[i] == "'":
-            i += 1
-            while i < len(args) and args[i] != "'":
-                arg += args[i]
-                i += 1
-            i += 1
-        else:
-            if args[i].isspace():
-                output.append(arg)
-                arg = ""
-                while i < len(args) and args[i].isspace():
-                    i += 1
-            else:
-                arg += args[i]
-                i += 1
-    
-    if arg:
-        output.append(arg)
-                
-    return output
+    return
 
 def main():
     
     while True:
-        sys.stdout.write("$ ")
+        raw_input = input("$ ")
 
-        command = input()
+        command, args = _split_command_args(raw_input.strip())
+
+        stdout_redirect = None
+        default_stdout = sys.stdout
+
+        if ">" in args or "1>" in args:
+            # get delimiter index
+            delim_index = get_stdout_delim_index(args)
+            args, stdout_redirect = args[:delim_index], args[delim_index + 1:]
+            
+            # set sys.out to file
+            stdout_redirect = open(stdout_redirect[0], "w")
+            sys.stdout = stdout_redirect
+        
+        output = stdout_redirect or default_stdout
 
         if command == "exit":
             break
-        elif command.startswith("echo "):
-            sys.stdout.write(f"{" ".join(shlex.split(command[5:]))}\n")
-        elif command.startswith("type "):
-            cmd = command[5:]
-            sys.stdout.write(_handle_type(cmd))
+        elif command == "echo":
+            print(" ".join(args))
+        elif command == "type":
+            print(_handle_type(args[0]))
         elif command == "pwd":
             _handle_pwd()
-        elif command.startswith("cd "):
-            _handle_cd(command[3:])
+        elif command == "cd":
+            _handle_cd(args[0])
         else:
-            _handle_external_program(command)
+            _handle_external_program(command, args, output)
+
+        if stdout_redirect:
+            sys.stdout = default_stdout
+            stdout_redirect.close()
 
 
 if __name__ == "__main__":

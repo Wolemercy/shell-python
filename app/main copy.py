@@ -1,4 +1,7 @@
-import os, subprocess, sys, shlex
+import os
+import shlex
+import subprocess
+import sys
 from pathlib import Path
 
 built_in_commands = { "cd", "echo", "exit", "pwd", "type", }
@@ -30,11 +33,11 @@ def _handle_external_program(command):
     if path:
         subprocess.run(args)    
     else:
-        sys.stdout.write(f"{command}: command not found\n")
+        print(f"{command}: command not found\n")
     return
 
 def _handle_pwd():
-    sys.stdout.write(f"{os.getcwd()}\n")
+    print(f"{os.getcwd()}\n")
 
 def _handle_cd(dir):
     if dir == "~":
@@ -42,28 +45,62 @@ def _handle_cd(dir):
     elif os.path.isdir(dir):
         os.chdir(dir)
     else:
-        sys.stdout.write(f"cd: {dir}: No such file or directory\n")
+        print(f"cd: {dir}: No such file or directory\n")
+
+def _split_command_args(raw_input: str):
+    args = shlex.split(raw_input)
+    return args[0], args[1:]
+
+def get_stdout_delim_index(args: list[str]) -> int:
+    if ">" in args:
+        return args.index(">")
+    if "1>" in args:
+        return args.index("1>")
+
+    return
 
 def main():
     
     while True:
-        sys.stdout.write("$ ")
+        raw_input = input("$ ")
 
-        command = input().strip()
+        command, args = _split_command_args(raw_input.strip())
+
+        stdout_redirect = None
+        default_stdout = sys.stdout
+
+        if ">" in args or "1>" in args:
+            # get delimiter index
+            delim_index = get_stdout_delim_index(args)
+            args, stdout_redirect = args[:delim_index], args[delim_index + 1:]
+            
+            # open file if it doesn't exist
+            stdout_redirect = open(stdout_redirect[0], "w")
+            sys.stdout = stdout_redirect
+
+            # set sys.out to file
+        
+        # execute command
+
+        # close file and reset sys.out
 
         if command == "exit":
             break
         elif command.startswith("echo "):
-            sys.stdout.write(f"{" ".join(shlex.split(command[5:]))}\n")
+            print(" ".join(args))
         elif command.startswith("type "):
             cmd = command[5:]
-            sys.stdout.write(_handle_type(cmd))
+            print(_handle_type(cmd))
         elif command == "pwd":
             _handle_pwd()
         elif command.startswith("cd "):
-            _handle_cd(command[3:])
+            _handle_cd(args)
         else:
             _handle_external_program(command)
+
+        if stdout_redirect:
+            sys.stdout = default_stdout
+            stdout_redirect.close()
 
 
 if __name__ == "__main__":
