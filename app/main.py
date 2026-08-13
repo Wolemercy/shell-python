@@ -8,9 +8,9 @@ from contextlib import ExitStack
 
 REDIRECTS = {
     ">": ("stdout", "w"),
+    "1>": ("stdout", "w"),
     ">>": ("stdout", "a"),
     "1>>": ("stdout", "a"),
-    "1>": ("stdout", "w"),
     "2>": ("stderr", "w"),
     "2>>": ("stderr", "a"),
 }
