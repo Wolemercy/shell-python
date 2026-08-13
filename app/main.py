@@ -2,98 +2,138 @@ import os
 import shlex
 import subprocess
 import sys
+from typing import NamedTuple, Optional, TextIO
 from pathlib import Path
+from contextlib import ExitStack
 
-built_in_commands = { "cd", "echo", "exit", "pwd", "type", }
+REDIRECTS = {
+    ">": ("stdout", "w"),
+    "1>": ("stdout", "w"),
+    "2>": ("stderr", "w"),
+}
 
-def find_executable(command, path_dirs):
+
+def _handle_exit(command: str, args: list[str], out: TextIO, err: TextIO):
+    raise SystemExit()
+
+
+def _handle_echo(command: str, args: list[str], out: TextIO, err: TextIO):
+    print(" ".join(args), file=out)
+
+
+def _handle_pwd(command: str, args: list[str], out: TextIO, err: TextIO):
+    print(os.getcwd(), file=out)
+
+
+def _handle_cd(command: str, args: list[str], out: TextIO, err: TextIO):
+    dir = args[0]
+    if dir == "~":
+        os.chdir(os.getenv("HOME"))
+    elif os.path.isdir(dir):
+        os.chdir(dir)
+    else:
+        print(f"cd: {dir}: No such file or directory", file=err)
+
+
+def _handle_type(command: str, args: list[str], out: TextIO, err: TextIO):
+    cmd = args[0]
+    if cmd in COMMAND_DISPATCH:
+        print(f"{cmd} is a shell builtin", file=out)
+        return
+
+    path = find_executable(cmd, os.environ.get("PATH").split(os.pathsep))
+
+    if path:
+        return print(f"{cmd} is {path}", file=out)
+
+    return print(f"{cmd}: not found", file=out)
+
+
+def _handle_external_program(
+    command: str, args: list[str], out: TextIO, err: TextIO
+):
+
+    path = find_executable(command, os.environ.get("PATH").split(os.pathsep))
+
+    if path:
+        subprocess.run([command] + args, stdout=out, stderr=err, check=False)
+    else:
+        print(f"{command}: command not found", file=err)
+
+
+COMMAND_DISPATCH = {
+    "echo": _handle_echo,
+    "type": _handle_type,
+    "pwd": _handle_pwd,
+    "cd": _handle_cd,
+    "exit": _handle_exit,
+}
+
+
+def find_executable(command: str, path_dirs: list[str]) -> Optional[str]:
     for dir in path_dirs:
         cmd_path: Path = Path(dir) / command
         if cmd_path.is_file() and os.access(cmd_path, os.X_OK):
             return cmd_path
     return None
 
-def _handle_type(command):
-    if command in built_in_commands:
-        return f"{command} is a shell builtin"
-    
-    path = find_executable(command, os.environ.get("PATH").split(os.pathsep))
-
-    if path:
-        return f"{command} is {path}"
-    
-    return f"{command}: not found"
-
-def _handle_external_program(command, args, stdout):
-    
-    path = find_executable(command, os.environ.get("PATH").split(os.pathsep))
-
-    if path:
-        subprocess.run([command] + args, stdout=stdout)    
-    else:
-        print(f"{command}: command not found")
-    return
-
-def _handle_pwd():
-    print(os.getcwd())
-
-def _handle_cd(dir):
-    if dir == "~":
-        os.chdir(os.getenv("HOME"))
-    elif os.path.isdir(dir):
-        os.chdir(dir)
-    else:
-        print(f"cd: {dir}: No such file or directory")
 
 def _split_command_args(raw_input: str):
     args = shlex.split(raw_input)
+    if not args:
+        return None
     return args[0], args[1:]
 
-def get_stdout_delim_index(args: list[str]) -> int:
-    if ">" in args:
-        return args.index(">")
-    if "1>" in args:
-        return args.index("1>")
 
-    return
+class Redirect(NamedTuple):
+    filename: str
+    mode: str
+
+
+def parse_redirects(tokens: list[str]) -> tuple[list[str], dict[str, Redirect]]:
+    argv, redirects = [], {}
+    i = 0
+
+    while i < len(tokens):
+        if tokens[i] in REDIRECTS and i + 1 < len(tokens):
+            stream, mode = REDIRECTS[tokens[i]]
+            redirects[stream] = Redirect(tokens[i + 1], mode)
+            i += 2
+        else:
+            argv.append(tokens[i])
+            i += 1
+    return argv, redirects
+
 
 def main():
-    
+
     while True:
         raw_input = input("$ ")
 
-        command, args = _split_command_args(raw_input.strip())
+        split_args = _split_command_args(raw_input.strip())
+        if not split_args:
+            continue
+        command, args = split_args
 
-        stdout_redirect = None
-        default_stdout = sys.stdout
+        args, redirects = parse_redirects(args)
 
-        if ">" in args or "1>" in args:
-            # get delimiter index
-            delim_index = get_stdout_delim_index(args)
-            args, stdout_redirect = args[:delim_index], args[delim_index + 1:]
-            
-            # set sys.out to file
-            stdout_redirect = open(stdout_redirect[0], "w")
-            sys.stdout = stdout_redirect
-        
-        output = stdout_redirect or default_stdout
+        with ExitStack() as cm:
+            out = sys.stdout
+            err = sys.stderr
 
-        if command == "exit":
-            break
-        elif command == "echo":
-            print(" ".join(args))
-        elif command == "type":
-            print(_handle_type(args[0]))
-        elif command == "pwd":
-            _handle_pwd()
-        elif command == "cd":
-            _handle_cd(args[0])
-        else:
-            _handle_external_program(command, args, output)
+            if "stdout" in redirects:
+                out_filename, out_mode = redirects["stdout"].filename, redirects["stdout"].mode
+                out = cm.enter_context(open(out_filename, out_mode))
 
-        if stdout_redirect:
-            sys.stdout = default_stdout
-            stdout_redirect.close()
+            if "stderr" in redirects:
+                err_filename, err_mode = redirects["stderr"].filename, redirects["stderr"].mode
+                err = cm.enter_context(open(err_filename, err_mode))
+
+            command_handler = COMMAND_DISPATCH.get(command)
+            if not command_handler:
+                command_handler = _handle_external_program
+
+            command_handler(command, args, out, err)
 
 
 if __name__ == "__main__":
