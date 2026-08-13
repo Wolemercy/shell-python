@@ -45,7 +45,7 @@ def _handle_type(command: str, args: list[str], out: TextIO, err: TextIO):
         print(f"{cmd} is a shell builtin", file=out)
         return
 
-    path = find_executable(cmd, os.environ.get("PATH").split(os.pathsep))
+    path = find_executable(cmd, _get_path_directories())
 
     if path:
         return print(f"{cmd} is {path}", file=out)
@@ -57,7 +57,7 @@ def _handle_external_program(
     command: str, args: list[str], out: TextIO, err: TextIO
 ):
 
-    path = find_executable(command, os.environ.get("PATH").split(os.pathsep))
+    path = find_executable(command, _get_path_directories())
 
     if path:
         subprocess.run([command] + args, stdout=out, stderr=err, check=False)
@@ -73,8 +73,11 @@ COMMAND_DISPATCH = {
     "exit": _handle_exit,
 }
 
+def _get_path_directories() -> list[str]:
+    return os.environ.get("PATH").split(os.pathsep)
 
-def find_executable(command: str, path_dirs: list[str]) -> Optional[str]:
+
+def find_executable(command: str, path_dirs: list[str]) -> Optional[Path]:
     for dir in path_dirs:
         cmd_path: Path = Path(dir) / command
         if cmd_path.is_file() and os.access(cmd_path, os.X_OK):
@@ -108,11 +111,30 @@ def parse_redirects(tokens: list[str]) -> tuple[list[str], dict[str, Redirect]]:
             i += 1
     return argv, redirects
 
-def completer(text: str, state: str) -> Optional[str]:
-    options = [cmd for cmd in ["echo ", "exit "] if cmd.startswith(text)]
+def _get_cmd_names_in_path(text: str):
+    cmd_names = set()
+    for dir in _get_path_directories():
+        dir_path = Path(dir)
+        try:
+            entries = dir_path.iterdir()
+            files = [p for p in entries if p.is_file() and os.access(p, os.X_OK) and p.name.startswith(text)]
+        except OSError:
+            continue
+        for file in files:
+            cmd_names.add(file.name)
+    return cmd_names
 
-    if state < len(options):
-        return options[state]
+
+def completer(text: str, state: int) -> Optional[str]:
+    options = _get_cmd_names_in_path(text)
+    for command in COMMAND_DISPATCH:
+        if command.startswith(text):
+            options.add(command)
+
+    sorted_options = sorted(list(options))
+
+    if state < len(sorted_options):
+        return f"{sorted_options[state]} "
     return None
 
 
