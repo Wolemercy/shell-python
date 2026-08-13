@@ -5,6 +5,7 @@ import sys
 from typing import NamedTuple, Optional, TextIO
 from pathlib import Path
 from contextlib import ExitStack
+import readline
 
 REDIRECTS = {
     ">": ("stdout", "w"),
@@ -107,8 +108,18 @@ def parse_redirects(tokens: list[str]) -> tuple[list[str], dict[str, Redirect]]:
             i += 1
     return argv, redirects
 
+def completer(text: str, state: str) -> Optional[str]:
+    options = [cmd for cmd in ["echo ", "exit "] if cmd.startswith(text)]
+
+    if state < len(options):
+        return options[state]
+    return None
+
 
 def main():
+
+    readline.set_completer(completer)
+    readline.parse_and_bind("tab: complete")
 
     while True:
         raw_input = input("$ ")
