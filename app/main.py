@@ -53,9 +53,7 @@ def _handle_type(command: str, args: list[str], out: TextIO, err: TextIO):
     return print(f"{cmd}: not found", file=out)
 
 
-def _handle_external_program(
-    command: str, args: list[str], out: TextIO, err: TextIO
-):
+def _handle_external_program(command: str, args: list[str], out: TextIO, err: TextIO):
 
     path = find_executable(command, _get_path_directories())
 
@@ -72,6 +70,7 @@ COMMAND_DISPATCH = {
     "cd": _handle_cd,
     "exit": _handle_exit,
 }
+
 
 def _get_path_directories() -> list[str]:
     return os.environ.get("PATH").split(os.pathsep)
@@ -111,13 +110,18 @@ def parse_redirects(tokens: list[str]) -> tuple[list[str], dict[str, Redirect]]:
             i += 1
     return argv, redirects
 
+
 def _get_cmd_names_in_path(text: str):
     cmd_names = set()
     for dir in _get_path_directories():
         dir_path = Path(dir)
         try:
             entries = dir_path.iterdir()
-            files = [p for p in entries if p.is_file() and os.access(p, os.X_OK) and p.name.startswith(text)]
+            files = [
+                p
+                for p in entries
+                if p.is_file() and os.access(p, os.X_OK) and p.name.startswith(text)
+            ]
         except OSError:
             continue
         for file in files:
@@ -158,11 +162,17 @@ def main():
             err = sys.stderr
 
             if "stdout" in redirects:
-                out_filename, out_mode = redirects["stdout"].filename, redirects["stdout"].mode
+                out_filename, out_mode = (
+                    redirects["stdout"].filename,
+                    redirects["stdout"].mode,
+                )
                 out = cm.enter_context(open(out_filename, out_mode))
 
             if "stderr" in redirects:
-                err_filename, err_mode = redirects["stderr"].filename, redirects["stderr"].mode
+                err_filename, err_mode = (
+                    redirects["stderr"].filename,
+                    redirects["stderr"].mode,
+                )
                 err = cm.enter_context(open(err_filename, err_mode))
 
             command_handler = COMMAND_DISPATCH.get(command)
