@@ -83,6 +83,9 @@ def handle_external_program(command: str, args: list[str], out: TextIO, err: Tex
     else:
         print(f"{command}: command not found", file=err)
 
+def handle_complete(command: str, args: list[str], out: TextIO, err: TextIO):
+    pass
+
 
 COMMAND_DISPATCH = {
     "echo": handle_echo,
@@ -90,6 +93,7 @@ COMMAND_DISPATCH = {
     "pwd": handle_pwd,
     "cd": handle_cd,
     "exit": handle_exit,
+    "complete": handle_complete
 }
 
 
