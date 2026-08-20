@@ -20,7 +20,7 @@ def find_executable(command: str, path_dirs: list[str]) -> Optional[Path]:
     return None
 
 
-def get_cmd_names_in_path(text: str) -> set[str]:
+def get_cmd_names_in_path(prefix: str) -> set[str]:
     cmd_names = set()
     for dir in get_path_directories():
         dir_path = Path(dir)
@@ -29,12 +29,12 @@ def get_cmd_names_in_path(text: str) -> set[str]:
             files = [
                 p
                 for p in entries
-                if p.is_file() and os.access(p, os.X_OK) and p.name.startswith(text)
+                if p.is_file() and os.access(p, os.X_OK) and p.name.startswith(prefix)
             ]
         except OSError:
             continue
         for file in files:
-            cmd_names.add(f"{file.name}")
+            cmd_names.add(file.name)
     return cmd_names
 
 
@@ -84,7 +84,9 @@ def handle_external_program(command: str, args: list[str], out: TextIO, err: Tex
         print(f"{command}: command not found", file=err)
 
 def handle_complete(command: str, args: list[str], out: TextIO, err: TextIO):
-    pass
+    if "-p" in args:
+        value = args[args.index("-p") + 1]
+        return print(f"complete: {value}: no completion specification", file=out)
 
 
 COMMAND_DISPATCH = {
@@ -93,7 +95,7 @@ COMMAND_DISPATCH = {
     "pwd": handle_pwd,
     "cd": handle_cd,
     "exit": handle_exit,
-    "complete": handle_complete
+    "complete": handle_complete,
 }
 
 
@@ -141,7 +143,7 @@ def get_command_completion_options(text: str) -> list[str]:
         if command.startswith(text):
             options.append(f"{command} ")
 
-    return list(options)
+    return options
 
 
 def get_file_completion_options(text: str) -> list[str]:
@@ -150,13 +152,16 @@ def get_file_completion_options(text: str) -> list[str]:
 
     files = []
 
-    for f in parent.iterdir():
-        if not f.name.startswith(prefix):
-            continue
-        if f.is_file():
-            files.append(f"{f} ")
-        if f.is_dir():
-            files.append(f"{f}/")
+    try:
+        for f in parent.iterdir():
+            if not f.name.startswith(prefix):
+                continue
+            if f.is_file():
+                files.append(f"{f} ")
+            if f.is_dir():
+                files.append(f"{f}/")
+    except OSError:
+        pass
 
     return files
 
