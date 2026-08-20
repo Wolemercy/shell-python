@@ -137,10 +137,12 @@ def get_command_completion_options(text: str) -> list[str]:
 
     return list(options)
 
-def get_file_completion_options(text: str) -> list[str]:
-    p = Path('./')
-    files = [f.name for f in p.iterdir() if f.is_file() and f.name.startswith(text)]
+def get_file_completion_options(text: str) -> list[Path]:
+    head, filename = os.path.split(text)
+    parent = Path(head)
 
+    files = [f for f in parent.iterdir() if f.is_file() and f.name.startswith(filename)]
+    
     return files
 
 def completer(text: str, state: int) -> Optional[str]:
