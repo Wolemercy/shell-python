@@ -20,7 +20,7 @@ def find_executable(command: str, path_dirs: list[str]) -> Optional[Path]:
     return None
 
 
-def get_cmd_names_in_path(text: str) -> set:
+def get_cmd_names_in_path(text: str) -> set[str]:
     cmd_names = set()
     for dir in get_path_directories():
         dir_path = Path(dir)
@@ -34,7 +34,7 @@ def get_cmd_names_in_path(text: str) -> set:
         except OSError:
             continue
         for file in files:
-            cmd_names.add(file.name)
+            cmd_names.add(f"{file.name}")
     return cmd_names
 
 
@@ -129,35 +129,48 @@ def parse_redirects(tokens: list[str]) -> tuple[list[str], dict[str, Redirect]]:
             i += 1
     return argv, redirects
 
+
 def get_command_completion_options(text: str) -> list[str]:
-    options = get_cmd_names_in_path(text)
+    cmd_names = get_cmd_names_in_path(text)
+    options = [f"{cmd_name} " for cmd_name in cmd_names]
     for command in COMMAND_DISPATCH:
         if command.startswith(text):
-            options.add(command)
+            options.append(f"{command} ")
 
     return list(options)
 
-def get_file_completion_options(text: str) -> list[Path]:
-    head, filename = os.path.split(text)
+
+def get_file_completion_options(text: str) -> list[str]:
+    head, prefix = os.path.split(text)
     parent = Path(head)
 
-    files = [f for f in parent.iterdir() if f.is_file() and f.name.startswith(filename)]
-    
+    files = []
+
+    for f in parent.iterdir():
+        if not f.name.startswith(prefix):
+            continue
+        if f.is_file():
+            files.append(f"{f} ")
+        if f.is_dir():
+            files.append(f"{f}/")
+
     return files
+
 
 def completer(text: str, state: int) -> Optional[str]:
     text_index_start = readline.get_begidx()
 
     if text_index_start == 0:
-        options =  get_command_completion_options(text)
+        options = get_command_completion_options(text)
     else:
         options = get_file_completion_options(text)
-    
+
     sorted_options = sorted(options)
-    
+
     if state < len(sorted_options):
-        return f"{sorted_options[state]} "
+        return f"{sorted_options[state]}"
     return None
+
 
 def setup():
     readline.set_completer_delims(" \t\n")
