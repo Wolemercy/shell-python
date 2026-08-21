@@ -107,6 +107,10 @@ def handle_complete(command: str, args: list[str], out: TextIO, err: TextIO):
             return
         completion_script, completion_cmd = token_args[0], token_args[1]
         COMPLETIONS[completion_cmd] = completion_script
+    elif token == "-r":
+        if len(token_args) < 1:
+            return
+        COMPLETIONS.pop(token_args[0], None)
 
 
 COMMAND_DISPATCH = {
