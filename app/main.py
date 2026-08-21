@@ -186,13 +186,13 @@ def get_file_completion_options(text: str) -> list[str]:
     return files
 
 
-def get_registered_completion_options(text: str) -> Optional[list[str]]:
+def get_registered_completion_options(text: str, state: int) -> Optional[list[str]]:
     options = None
     try:
         line = readline.get_line_buffer()
         end_index = readline.get_endidx()
         cmd_split = line.split()
-        cmd, args = cmd_split[0], cmd_split[1:]
+        cmd, args = cmd_split[0], cmd_split
         completion_script = COMPLETIONS.get(cmd)
 
         if text:
@@ -200,10 +200,9 @@ def get_registered_completion_options(text: str) -> Optional[list[str]]:
         else:
             penultimate_word = args[-1] if len(args) > 0 else ""
 
-        env = os.environ | { "COMP_LINE": line, "COMP_POINT": str(end_index) }
+        env = os.environ | {"COMP_LINE": line, "COMP_POINT": str(end_index)}
 
         if completion_script:
-            
             output = subprocess.run(
                 [completion_script, cmd, text, penultimate_word],
                 capture_output=True,
@@ -211,10 +210,21 @@ def get_registered_completion_options(text: str) -> Optional[list[str]]:
                 env=env,
             ).stdout
             options = [f"{option} " for option in output.splitlines()]
+
     except Exception:
         pass
 
     return options
+
+
+def custom_display_hook(substitution, matches: list[str], longest_match_length):
+    line = readline.get_line_buffer()
+    output = ""
+    for match in matches:
+        output += f"{match.strip()}  "
+
+    print(f"\n{output.strip()}")
+    print(f"$ {line}", end="", flush=True)
 
 
 def completer(text: str, state: int) -> Optional[str]:
@@ -223,7 +233,7 @@ def completer(text: str, state: int) -> Optional[str]:
     if text_index_start == 0:
         options = get_command_completion_options(text)
     else:
-        options = get_registered_completion_options(text)
+        options = get_registered_completion_options(text, state)
         if options is None:
             options = get_file_completion_options(text)
 
@@ -238,6 +248,7 @@ def setup():
     readline.set_completer_delims(" \t\n")
     readline.set_completer(completer)
     readline.parse_and_bind("tab: complete")
+    readline.set_completion_display_matches_hook(custom_display_hook)
 
     return
 
