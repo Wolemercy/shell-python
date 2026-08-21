@@ -83,10 +83,25 @@ def handle_external_program(command: str, args: list[str], out: TextIO, err: Tex
     else:
         print(f"{command}: command not found", file=err)
 
+COMPLETIONS = {}
+
 def handle_complete(command: str, args: list[str], out: TextIO, err: TextIO):
     if "-p" in args:
-        value = args[args.index("-p") + 1]
-        return print(f"complete: {value}: no completion specification", file=out)
+        key_idx = args.index("-p")
+        if key_idx + 1 >= len(args):
+            return
+        command = args[key_idx + 1]
+        script = COMPLETIONS.get(command)
+        if script:
+            return print(f"complete -C {script} {command}")
+        else:
+            return print(f"complete: {command}: no completion specification", file=out)
+    elif "-C" in args:
+        key_idx = args.index("-C")
+        if key_idx + 2 >= len(args):
+            return
+        script, command = args[key_idx + 1], args[key_idx + 2]
+        COMPLETIONS[command] = script
 
 
 COMMAND_DISPATCH = {
