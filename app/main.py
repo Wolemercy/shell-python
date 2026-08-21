@@ -190,11 +190,20 @@ def get_registered_completion_options(text: str) -> Optional[list[str]]:
     options = None
     try:
         line = readline.get_line_buffer()
-        cmd = line.split()[0]
+        cmd_split = line.split()
+        cmd, args = cmd_split[0], cmd_split[1:]
         completion_script = COMPLETIONS.get(cmd)
+
+        if len(args) > 1:
+            penultimate_word = args[-2] if text else args[-1]
+        else:
+            penultimate_word = ""
+
         if completion_script:
             output = subprocess.run(
-                [completion_script, cmd, text], capture_output=True, text=True
+                [completion_script, cmd, text, penultimate_word],
+                capture_output=True,
+                text=True,
             ).stdout
             options = [f"{option} " for option in output.splitlines()]
     except Exception:
