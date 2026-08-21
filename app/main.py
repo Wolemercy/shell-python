@@ -186,18 +186,37 @@ def get_file_completion_options(text: str) -> list[str]:
     return files
 
 
+def get_registered_completion_options(text: str) -> Optional[list[str]]:
+    options = None
+    try:
+        line = readline.get_line_buffer()
+        cmd = line.split()[0]
+        completion_script = COMPLETIONS.get(cmd)
+        if completion_script:
+            output = subprocess.run(
+                [completion_script, cmd, text], capture_output=True, text=True
+            ).stdout
+            options = [f"{option} " for option in output.splitlines()]
+    except Exception:
+        pass
+
+    return options
+
+
 def completer(text: str, state: int) -> Optional[str]:
     text_index_start = readline.get_begidx()
 
     if text_index_start == 0:
         options = get_command_completion_options(text)
     else:
-        options = get_file_completion_options(text)
+        options = get_registered_completion_options(text)
+        if options is None:
+            options = get_file_completion_options(text)
 
     sorted_options = sorted(options)
 
     if state < len(sorted_options):
-        return f"{sorted_options[state]}"
+        return sorted_options[state]
     return None
 
 
