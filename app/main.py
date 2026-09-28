@@ -112,6 +112,9 @@ def handle_complete(command: str, args: list[str], out: TextIO, err: TextIO):
             return
         COMPLETIONS.pop(token_args[0], None)
 
+def handle_jobs(command: str, args: list[str], out: TextIO, err: TextIO):
+    pass
+
 
 COMMAND_DISPATCH = {
     "echo": handle_echo,
@@ -120,6 +123,7 @@ COMMAND_DISPATCH = {
     "cd": handle_cd,
     "exit": handle_exit,
     "complete": handle_complete,
+    "jobs": handle_jobs,
 }
 
 
