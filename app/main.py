@@ -5,9 +5,7 @@ import subprocess
 import sys
 from contextlib import ExitStack
 from pathlib import Path
-from typing import NamedTuple, Optional, TextIO
-
-JOB_ID = 0
+from typing import NamedTuple, Optional, TextIO, TypedDict
 
 
 def get_path_directories() -> list[str]:
@@ -114,20 +112,43 @@ def handle_complete(command: str, args: list[str], out: TextIO, err: TextIO):
             return
         COMPLETIONS.pop(token_args[0], None)
 
+class JobInfo(TypedDict):
+    job_id: int
+    pid: int
+    command_str: str
+    status: str
+
+JOB_ID = 0
+JOBS: dict[int, JobInfo] = {}
+
 def is_background_job(args: list[str]) -> bool:
     if args and args[-1] == "&":
         return True
     return False
 
+def _build_job_output(jobInfo: JobInfo):
+    status = jobInfo.get("status")
+    status_padding = 24 - len(status)
+    return f"[{jobInfo.get("job_id")}]+  {status:<{status_padding}}{" ".join(jobInfo.get("command_str"))}"
+
 def handle_jobs(command: str, args: list[str], out: TextIO, err: TextIO):
+    for _, job in JOBS.items():
+        job_str = _build_job_output(job)
+        print(job_str, file=out)
+    return
+
+def run_background_job(command: str, args: list[str], out: TextIO, err: TextIO):
     global JOB_ID
     if not is_background_job(args):
         return
 
+    command_str = [command] + args[:-1]
+
     JOB_ID += 1
 
-    process = subprocess.Popen([command] + args[:-1], stdout=out, stderr=err)
+    process = subprocess.Popen(command_str, stdout=out, stderr=err)
     print(f"[{JOB_ID}] {process.pid}", file=out)
+    JOBS[JOB_ID] = JobInfo(job_id=JOB_ID, pid=process.pid, command_str=command_str, status="Running")
     return
     
 
@@ -300,7 +321,7 @@ def main():
                 std_dict[std] = cm.enter_context(open(filename, mode))
 
             if is_background_job(args):
-                command_handler = handle_jobs
+                command_handler = run_background_job
             elif COMMAND_DISPATCH.get(command):
                 command_handler = COMMAND_DISPATCH.get(command)
             else:
