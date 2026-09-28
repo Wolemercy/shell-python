@@ -126,14 +126,20 @@ def is_background_job(args: list[str]) -> bool:
         return True
     return False
 
-def _build_job_output(jobInfo: JobInfo):
+def _build_job_output(jobInfo: JobInfo, marker: str):
     status = jobInfo.get("status")
     status_padding = 24 - len(status)
-    return f"[{jobInfo.get("job_id")}]+  {status:<{status_padding}}{" ".join(jobInfo.get("command_str"))}"
+    return f"[{jobInfo.get("job_id")}]{marker}  {status:<{status_padding}}{" ".join(jobInfo.get("command_str"))}"
 
 def handle_jobs(command: str, args: list[str], out: TextIO, err: TextIO):
-    for _, job in JOBS.items():
-        job_str = _build_job_output(job)
+    jobs_count = len(JOBS)
+    for index, job in enumerate(JOBS.values()):
+        marker = ""
+        if index == jobs_count - 1:
+            marker = "+"
+        elif index == jobs_count - 2:
+            marker = "-"
+        job_str = _build_job_output(job, marker)
         print(job_str, file=out)
     return
 
