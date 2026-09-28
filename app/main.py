@@ -7,6 +7,8 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import NamedTuple, Optional, TextIO
 
+JOB_ID = 0
+
 
 def get_path_directories() -> list[str]:
     return os.environ.get("PATH").split(os.pathsep)
@@ -112,9 +114,22 @@ def handle_complete(command: str, args: list[str], out: TextIO, err: TextIO):
             return
         COMPLETIONS.pop(token_args[0], None)
 
-def handle_jobs(command: str, args: list[str], out: TextIO, err: TextIO):
-    pass
+def is_background_job(args: list[str]) -> bool:
+    if args and args[-1] == "&":
+        return True
+    return False
 
+def handle_jobs(command: str, args: list[str], out: TextIO, err: TextIO):
+    global JOB_ID
+    if not is_background_job(args):
+        return
+
+    JOB_ID += 1
+
+    process = subprocess.Popen([command] + args[:-1], stdout=out, stderr=err)
+    print(f"[{JOB_ID}] {process.pid}", file=out)
+    return
+    
 
 COMMAND_DISPATCH = {
     "echo": handle_echo,
@@ -284,8 +299,11 @@ def main():
             for std, (filename, mode) in redirects.items():
                 std_dict[std] = cm.enter_context(open(filename, mode))
 
-            command_handler = COMMAND_DISPATCH.get(command)
-            if not command_handler:
+            if is_background_job(args):
+                command_handler = handle_jobs
+            elif COMMAND_DISPATCH.get(command):
+                command_handler = COMMAND_DISPATCH.get(command)
+            else:
                 command_handler = handle_external_program
 
             command_handler(command, args, std_dict["stdout"], std_dict["stderr"])
