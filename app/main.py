@@ -116,7 +116,7 @@ class JobInfo(TypedDict):
     job_id: int
     pid: int
     command_str: str
-    status: str
+    process: subprocess.Popen
 
 JOB_ID = 0
 JOBS: dict[int, JobInfo] = {}
@@ -126,14 +126,20 @@ def is_background_job(args: list[str]) -> bool:
         return True
     return False
 
-def _build_job_output(jobInfo: JobInfo, marker: str):
-    status = jobInfo.get("status")
+def _build_job_output(job_info: JobInfo, marker: str):
+    status = _get_job_status(job_info)
     status_padding = 24 - len(status)
-    return f"[{jobInfo.get("job_id")}]{marker}  {status:<{status_padding}}{" ".join(jobInfo.get("command_str"))}"
+    return f"[{job_info.get("job_id")}]{marker}  {status:<{status_padding}}{" ".join(job_info.get("command_str"))}"
+
+def _get_job_status(job_info: JobInfo):
+    process = job_info.get("process")
+    return "Done" if process.poll() is not None else "Running"
+
 
 def handle_jobs(command: str, args: list[str], out: TextIO, err: TextIO):
     jobs_count = len(JOBS)
-    for index, job in enumerate(JOBS.values()):
+    completed_job_ids = set()
+    for index, [job_id, job] in enumerate(JOBS.items()):
         marker = ""
         if index == jobs_count - 1:
             marker = "+"
@@ -141,6 +147,14 @@ def handle_jobs(command: str, args: list[str], out: TextIO, err: TextIO):
             marker = "-"
         job_str = _build_job_output(job, marker)
         print(job_str, file=out)
+
+        status = _get_job_status(job)
+        if status == "Done":
+            completed_job_ids.add(job_id)
+
+    for id in completed_job_ids:
+        JOBS.pop(id, None)
+
     return
 
 def run_background_job(command: str, args: list[str], out: TextIO, err: TextIO):
@@ -154,7 +168,7 @@ def run_background_job(command: str, args: list[str], out: TextIO, err: TextIO):
 
     process = subprocess.Popen(command_str, stdout=out, stderr=err)
     print(f"[{JOB_ID}] {process.pid}", file=out)
-    JOBS[JOB_ID] = JobInfo(job_id=JOB_ID, pid=process.pid, command_str=command_str, status="Running")
+    JOBS[JOB_ID] = JobInfo(job_id=JOB_ID, pid=process.pid, command_str=command_str, process=process)
     return
     
 
