@@ -5,7 +5,7 @@ import subprocess
 import sys
 from contextlib import ExitStack
 from pathlib import Path
-from typing import NamedTuple, Optional, TextIO, TypedDict
+from typing import IO, Any, NamedTuple, Optional, TextIO, TypedDict
 
 
 def get_path_directories() -> list[str]:
@@ -118,6 +118,27 @@ class JobInfo(TypedDict):
     process: subprocess.Popen
 
 
+class Redirect(NamedTuple):
+    filename: str
+    mode: str
+
+
+class Stage(NamedTuple):
+    argv: list[str]
+    redirects: dict[str, Redirect]
+    background: bool
+
+
+REDIRECTS = {
+    ">": ("stdout", "w"),
+    "1>": ("stdout", "w"),
+    ">>": ("stdout", "a"),
+    "1>>": ("stdout", "a"),
+    "2>": ("stderr", "w"),
+    "2>>": ("stderr", "a"),
+}
+
+
 JOBS: dict[int, JobInfo] = {}
 
 
@@ -154,6 +175,7 @@ def _report_jobs(out: TextIO, only_done: bool):
 
     return
 
+
 def handle_jobs(command: str, args: list[str], out: TextIO, err: TextIO):
     _report_jobs(out, False)
 
@@ -173,6 +195,52 @@ def run_background_job(command: str, args: list[str], out: TextIO, err: TextIO):
     return
 
 
+def _split_command_stages(argv: list[str]) -> list[list[str]]:
+    split_commands = []
+    current_command = []
+    for token in argv:
+        if token == "|":
+            split_commands.append(current_command)
+            current_command = []
+        else:
+            current_command.append(token)
+
+    if current_command:
+        split_commands.append(current_command)
+    return split_commands
+
+
+def run_pipeline(stages: list[Stage], cm: ExitStack):
+
+    current_input: Optional[IO[Any]] = None
+    processes: list[subprocess.Popen[Any]] = []
+
+    for index, stage in enumerate(stages):
+        is_last = index == len(stages) - 1
+
+        stdout_dest = sys.stdout if is_last else subprocess.PIPE
+        std_dict = open_stage_streams(stage, cm, stdout_dest, sys.stderr)
+
+        p = subprocess.Popen(
+            stage.argv,
+            stdin=current_input,
+            stdout=std_dict["stdout"],
+            stderr=std_dict["stderr"],
+        )
+
+        processes.append(p)
+
+        if current_input is not None:
+            current_input.close()
+
+        current_input = p.stdout
+
+    for p in processes:
+        p.wait()
+
+    return
+
+
 COMMAND_DISPATCH = {
     "echo": handle_echo,
     "type": handle_type,
@@ -185,28 +253,11 @@ COMMAND_DISPATCH = {
 
 
 def split_command_args(raw_input: str):
-    args = shlex.split(raw_input)
-    if not args:
-        return None
-    return args[0], args[1:]
+    argv = shlex.split(raw_input)
+    return argv
 
 
-class Redirect(NamedTuple):
-    filename: str
-    mode: str
-
-
-REDIRECTS = {
-    ">": ("stdout", "w"),
-    "1>": ("stdout", "w"),
-    ">>": ("stdout", "a"),
-    "1>>": ("stdout", "a"),
-    "2>": ("stderr", "w"),
-    "2>>": ("stderr", "a"),
-}
-
-
-def parse_redirects(tokens: list[str]) -> tuple[list[str], dict[str, Redirect], bool]:
+def parse_stage(tokens: list[str]) -> Stage:
     argv, redirects, is_background_job = [], {}, False
     i = 0
 
@@ -221,7 +272,7 @@ def parse_redirects(tokens: list[str]) -> tuple[list[str], dict[str, Redirect], 
         else:
             argv.append(tokens[i])
             i += 1
-    return argv, redirects, is_background_job
+    return Stage(argv, redirects, is_background_job)
 
 
 def get_command_completion_options(text: str) -> list[str]:
@@ -312,6 +363,17 @@ def completer(text: str, state: int) -> Optional[str]:
     return None
 
 
+def open_stage_streams(stage: Stage, cm, default_out, default_err):
+    std_dict = {
+        "stdout": default_out,
+        "stderr": default_err,
+    }
+    for std, (filename, mode) in stage.redirects.items():
+        std_dict[std] = cm.enter_context(open(filename, mode))
+
+    return std_dict
+
+
 def setup():
     readline.set_completer_delims(" \t\n")
     readline.set_completer(completer)
@@ -329,30 +391,31 @@ def main():
         reap_completed_jobs()
         raw_input = input("$ ")
 
-        split_args = split_command_args(raw_input.strip())
-        if not split_args:
+        argv = split_command_args(raw_input.strip())
+        if not argv:
             continue
-        command, args = split_args
 
-        args, redirects, is_background_job = parse_redirects(args)
+        stage_tokens = _split_command_stages(argv)
+
+        stages = [parse_stage(stage) for stage in stage_tokens]
 
         with ExitStack() as cm:
-            std_dict = {
-                "stdout": sys.stdout,
-                "stderr": sys.stderr,
-            }
+            if len(stages) == 1:
+                stage = stages[0]
+                std_dict = open_stage_streams(stage, cm, sys.stdout, sys.stderr)
 
-            for std, (filename, mode) in redirects.items():
-                std_dict[std] = cm.enter_context(open(filename, mode))
+                command, args = stage.argv[0], stage.argv[1:]
 
-            if is_background_job:
-                command_handler = run_background_job
-            elif COMMAND_DISPATCH.get(command):
-                command_handler = COMMAND_DISPATCH.get(command)
+                if stage.background:
+                    command_handler = run_background_job
+                elif COMMAND_DISPATCH.get(command):
+                    command_handler = COMMAND_DISPATCH.get(command)
+                else:
+                    command_handler = handle_external_program
+
+                command_handler(command, args, std_dict["stdout"], std_dict["stderr"])
             else:
-                command_handler = handle_external_program
-
-            command_handler(command, args, std_dict["stdout"], std_dict["stderr"])
+                run_pipeline(stages, cm)
 
 
 if __name__ == "__main__":
