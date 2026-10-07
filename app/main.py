@@ -157,6 +157,27 @@ def handle_jobs(command: str, args: list[str], out: TextIO, err: TextIO):
 
     return
 
+def reap_completed_jobs():
+    jobs_count = len(JOBS)
+    completed_job_ids = set()
+    for index, [job_id, job] in enumerate(JOBS.items()):
+        marker = ""
+        if index == jobs_count - 1:
+            marker = "+"
+        elif index == jobs_count - 2:
+            marker = "-"
+
+        status = _get_job_status(job)
+        if status == "Done":
+            job_str = _build_job_output(job, marker)
+            print(job_str)
+            completed_job_ids.add(job_id)
+
+    for id in completed_job_ids:
+        JOBS.pop(id, None)
+
+    return
+
 def run_background_job(command: str, args: list[str], out: TextIO, err: TextIO):
     global JOB_ID
     if not is_background_job(args):
@@ -316,12 +337,12 @@ def setup():
 
     return
 
-
 def main():
 
     setup()
 
     while True:
+        reap_completed_jobs()
         raw_input = input("$ ")
 
         split_args = split_command_args(raw_input.strip())
