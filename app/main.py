@@ -118,7 +118,6 @@ class JobInfo(TypedDict):
     command_str: str
     process: subprocess.Popen
 
-JOB_ID = 0
 JOBS: dict[int, JobInfo] = {}
 
 def is_background_job(args: list[str]) -> bool:
@@ -135,11 +134,13 @@ def _get_job_status(job_info: JobInfo):
     process = job_info.get("process")
     return "Done" if process.poll() is not None else "Running"
 
+def _get_next_job_id():
+    return max(JOBS.keys(), default=0) + 1
+
 
 def handle_jobs(command: str, args: list[str], out: TextIO, err: TextIO):
     jobs_count = len(JOBS)
-    completed_job_ids = set()
-    for index, [job_id, job] in enumerate(JOBS.items()):
+    for index, [job_id, job] in enumerate(JOBS.copy().items()):
         marker = ""
         if index == jobs_count - 1:
             marker = "+"
@@ -150,17 +151,13 @@ def handle_jobs(command: str, args: list[str], out: TextIO, err: TextIO):
 
         status = _get_job_status(job)
         if status == "Done":
-            completed_job_ids.add(job_id)
-
-    for id in completed_job_ids:
-        JOBS.pop(id, None)
+            JOBS.pop(job_id, None)
 
     return
 
 def reap_completed_jobs():
     jobs_count = len(JOBS)
-    completed_job_ids = set()
-    for index, [job_id, job] in enumerate(JOBS.items()):
+    for index, [job_id, job] in enumerate(JOBS.copy().items()):
         marker = ""
         if index == jobs_count - 1:
             marker = "+"
@@ -171,25 +168,19 @@ def reap_completed_jobs():
         if status == "Done":
             job_str = _build_job_output(job, marker)
             print(job_str)
-            completed_job_ids.add(job_id)
-
-    for id in completed_job_ids:
-        JOBS.pop(id, None)
-
+            JOBS.pop(job_id, None)
     return
 
 def run_background_job(command: str, args: list[str], out: TextIO, err: TextIO):
-    global JOB_ID
+    job_id = _get_next_job_id()
     if not is_background_job(args):
         return
 
     command_str = [command] + args[:-1]
 
-    JOB_ID += 1
-
     process = subprocess.Popen(command_str, stdout=out, stderr=err)
-    print(f"[{JOB_ID}] {process.pid}", file=out)
-    JOBS[JOB_ID] = JobInfo(job_id=JOB_ID, pid=process.pid, command_str=command_str, process=process)
+    print(f"[{job_id}] {process.pid}", file=out)
+    JOBS[job_id] = JobInfo(job_id=job_id, pid=process.pid, command_str=command_str, process=process)
     return
     
 
