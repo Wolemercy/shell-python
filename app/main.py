@@ -112,33 +112,29 @@ def handle_complete(command: str, args: list[str], out: TextIO, err: TextIO):
             return
         COMPLETIONS.pop(token_args[0], None)
 
+
 class JobInfo(TypedDict):
-    job_id: int
-    pid: int
-    command_str: str
+    argv: list[str]
     process: subprocess.Popen
+
 
 JOBS: dict[int, JobInfo] = {}
 
-def is_background_job(args: list[str]) -> bool:
-    if args and args[-1] == "&":
-        return True
-    return False
 
-def _build_job_output(job_info: JobInfo, marker: str):
-    status = _get_job_status(job_info)
-    status_padding = 24 - len(status)
-    return f"[{job_info.get("job_id")}]{marker}  {status:<{status_padding}}{" ".join(job_info.get("command_str"))}"
+def _build_job_output(job_id: int, job_info: JobInfo, status: str, marker: str):
+    return f"[{job_id}]{marker}  {status:<24}{' '.join(job_info['argv'])}"
+
 
 def _get_job_status(job_info: JobInfo):
-    process = job_info.get("process")
+    process = job_info["process"]
     return "Done" if process.poll() is not None else "Running"
+
 
 def _get_next_job_id():
     return max(JOBS.keys(), default=0) + 1
 
 
-def handle_jobs(command: str, args: list[str], out: TextIO, err: TextIO):
+def _report_jobs(out: TextIO, only_done: bool):
     jobs_count = len(JOBS)
     for index, [job_id, job] in enumerate(JOBS.copy().items()):
         marker = ""
@@ -146,43 +142,36 @@ def handle_jobs(command: str, args: list[str], out: TextIO, err: TextIO):
             marker = "+"
         elif index == jobs_count - 2:
             marker = "-"
-        job_str = _build_job_output(job, marker)
-        print(job_str, file=out)
 
         status = _get_job_status(job)
+        job_str = _build_job_output(job_id, job, status, marker)
+
         if status == "Done":
+            print(job_str, file=out)
             JOBS.pop(job_id, None)
+        elif not only_done:
+            print(job_str, file=out)
 
     return
+
+def handle_jobs(command: str, args: list[str], out: TextIO, err: TextIO):
+    _report_jobs(out, False)
+
 
 def reap_completed_jobs():
-    jobs_count = len(JOBS)
-    for index, [job_id, job] in enumerate(JOBS.copy().items()):
-        marker = ""
-        if index == jobs_count - 1:
-            marker = "+"
-        elif index == jobs_count - 2:
-            marker = "-"
+    _report_jobs(sys.stdout, True)
 
-        status = _get_job_status(job)
-        if status == "Done":
-            job_str = _build_job_output(job, marker)
-            print(job_str)
-            JOBS.pop(job_id, None)
-    return
 
 def run_background_job(command: str, args: list[str], out: TextIO, err: TextIO):
     job_id = _get_next_job_id()
-    if not is_background_job(args):
-        return
 
-    command_str = [command] + args[:-1]
+    argv = [command] + args
 
-    process = subprocess.Popen(command_str, stdout=out, stderr=err)
+    process = subprocess.Popen(argv, stdout=out, stderr=err)
     print(f"[{job_id}] {process.pid}", file=out)
-    JOBS[job_id] = JobInfo(job_id=job_id, pid=process.pid, command_str=command_str, process=process)
+    JOBS[job_id] = JobInfo(argv=argv, process=process)
     return
-    
+
 
 COMMAND_DISPATCH = {
     "echo": handle_echo,
@@ -217,8 +206,8 @@ REDIRECTS = {
 }
 
 
-def parse_redirects(tokens: list[str]) -> tuple[list[str], dict[str, Redirect]]:
-    argv, redirects = [], {}
+def parse_redirects(tokens: list[str]) -> tuple[list[str], dict[str, Redirect], bool]:
+    argv, redirects, is_background_job = [], {}, False
     i = 0
 
     while i < len(tokens):
@@ -226,10 +215,13 @@ def parse_redirects(tokens: list[str]) -> tuple[list[str], dict[str, Redirect]]:
             stream, mode = REDIRECTS[tokens[i]]
             redirects[stream] = Redirect(tokens[i + 1], mode)
             i += 2
+        elif tokens[i] == "&" and i == len(tokens) - 1:
+            is_background_job = True
+            i += 1
         else:
             argv.append(tokens[i])
             i += 1
-    return argv, redirects
+    return argv, redirects, is_background_job
 
 
 def get_command_completion_options(text: str) -> list[str]:
@@ -328,6 +320,7 @@ def setup():
 
     return
 
+
 def main():
 
     setup()
@@ -341,7 +334,7 @@ def main():
             continue
         command, args = split_args
 
-        args, redirects = parse_redirects(args)
+        args, redirects, is_background_job = parse_redirects(args)
 
         with ExitStack() as cm:
             std_dict = {
@@ -352,7 +345,7 @@ def main():
             for std, (filename, mode) in redirects.items():
                 std_dict[std] = cm.enter_context(open(filename, mode))
 
-            if is_background_job(args):
+            if is_background_job:
                 command_handler = run_background_job
             elif COMMAND_DISPATCH.get(command):
                 command_handler = COMMAND_DISPATCH.get(command)
