@@ -195,19 +195,19 @@ def run_background_job(command: str, args: list[str], out: TextIO, err: TextIO):
     return
 
 
-def _split_command_stages(argv: list[str]) -> list[list[str]]:
-    split_commands = []
-    current_command = []
+def split_stages(argv: list[str]) -> list[list[str]]:
+    stages = []
+    current_stage = []
     for token in argv:
         if token == "|":
-            split_commands.append(current_command)
-            current_command = []
+            stages.append(current_stage)
+            current_stage = []
         else:
-            current_command.append(token)
+            current_stage.append(token)
 
-    if current_command:
-        split_commands.append(current_command)
-    return split_commands
+    if current_stage:
+        stages.append(current_stage)
+    return stages
 
 
 def run_pipeline(stages: list[Stage], cm: ExitStack):
@@ -218,22 +218,39 @@ def run_pipeline(stages: list[Stage], cm: ExitStack):
     for index, stage in enumerate(stages):
         is_last = index == len(stages) - 1
 
-        stdout_dest = sys.stdout if is_last else subprocess.PIPE
-        std_dict = open_stage_streams(stage, cm, stdout_dest, sys.stderr)
+        if not is_last:
+            r, w = os.pipe()
+            pipe_out = os.fdopen(w, "w")
+            default_out = pipe_out
+        else:
+            default_out = sys.stdout
+            pipe_out = None
 
-        p = subprocess.Popen(
-            stage.argv,
-            stdin=current_input,
-            stdout=std_dict["stdout"],
-            stderr=std_dict["stderr"],
-        )
+        std_dict = open_stage_streams(stage, cm, default_out, sys.stderr)
+        stdout, stderr = std_dict["stdout"], std_dict["stderr"]
 
-        processes.append(p)
+        command, args = stage.argv[0], stage.argv[1:]
+        if COMMAND_DISPATCH.get(command):
+            handler = COMMAND_DISPATCH.get(command)
+            handler(command, args, stdout, stderr)
+        else:
+            p = subprocess.Popen(
+                stage.argv,
+                stdin=current_input,
+                stdout=stdout,
+                stderr=stderr,
+            )
 
-        if current_input is not None:
+            processes.append(p)
+
+        if current_input:
             current_input.close()
 
-        current_input = p.stdout
+        if not is_last:
+            current_input = os.fdopen(r)
+
+        if pipe_out:
+            pipe_out.close()
 
     for p in processes:
         p.wait()
@@ -252,7 +269,7 @@ COMMAND_DISPATCH = {
 }
 
 
-def split_command_args(raw_input: str):
+def tokenize(raw_input: str):
     argv = shlex.split(raw_input)
     return argv
 
@@ -391,11 +408,11 @@ def main():
         reap_completed_jobs()
         raw_input = input("$ ")
 
-        argv = split_command_args(raw_input.strip())
+        argv = tokenize(raw_input.strip())
         if not argv:
             continue
 
-        stage_tokens = _split_command_stages(argv)
+        stage_tokens = split_stages(argv)
 
         stages = [parse_stage(stage) for stage in stage_tokens]
 
