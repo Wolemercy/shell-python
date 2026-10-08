@@ -113,9 +113,10 @@ def handle_complete(command: str, args: list[str], out: TextIO, err: TextIO):
             return
         COMPLETIONS.pop(token_args[0], None)
 
+
 def _handle_list_history(args: list[str], out: TextIO):
     history_length = readline.get_current_history_length()
-    
+
     limit = int(args[0]) if len(args) else history_length
     start_index = max(1, history_length - limit + 1)
 
@@ -124,24 +125,30 @@ def _handle_list_history(args: list[str], out: TextIO):
         print(f"{index:>5}  {history_item}", file=out)
     return
 
+
 def _handle_read_history(file_path: str):
     with open(file_path, "r") as f:
         for l in f.readlines():
             line = l.strip("\n")
-            if not line: continue
+            if not line:
+                continue
             readline.add_history(line)
     return
+
 
 def _write_history_from(file_path: str, mode: str, start: int):
     with open(file_path, mode) as f:
         for i in range(start, readline.get_current_history_length() + 1):
             f.write(f"{readline.get_history_item(i)}\n")
 
+
 def _handle_write_history(file_path: str):
     _write_history_from(file_path, "w", 1)
     return
 
+
 LAST_APPENDED_HISTORY_INDEX = 0
+
 
 def _handle_append_history(file_path: str):
     global LAST_APPENDED_HISTORY_INDEX
@@ -150,6 +157,7 @@ def _handle_append_history(file_path: str):
     LAST_APPENDED_HISTORY_INDEX = readline.get_current_history_length()
     return
 
+
 def read_history_on_startup():
     history_file = os.getenv("HISTFILE")
     if not history_file:
@@ -157,6 +165,7 @@ def read_history_on_startup():
     _handle_read_history(history_file)
     LAST_APPENDED_HISTORY_INDEX = readline.get_current_history_length()
     return
+
 
 def write_history_on_exit():
     history_file = os.getenv("HISTFILE")
@@ -246,17 +255,37 @@ def _report_jobs(out: TextIO, only_done: bool):
 def handle_jobs(command: str, args: list[str], out: TextIO, err: TextIO):
     _report_jobs(out, False)
 
-def _handle_missing_variables(token_args, out: TextIO):
-    variable, *_ = token_args or [None]
-    if variable:
-        print(f"declare: {variable}: not found", file=out)
-    pass
+
+SHELL_VARIABLES = {}
+
+
+def _handle_print_variables(token_args, out: TextIO):
+    key, *_ = token_args or [None]
+    if not key:
+        return
+    val = SHELL_VARIABLES.get(key, None)
+    if val:
+        print(f'declare -- {key}="{val}"', file=out)
+    else:
+        print(f"declare: {key}: not found", file=out)
+
+
+def _handle_store_variable(arg: str):
+    key, val = arg.split("=")
+    SHELL_VARIABLES[key] = val
+
+
+def _is_assigning(args: list[str]):
+    return args and "=" in args[0]
+
 
 def handle_declare(command: str, args: list[str], out: TextIO, err: TextIO):
-    token, *token_args = args or [None]
+    if _is_assigning(args):
+        _handle_store_variable(args[0])
 
+    token, *token_args = args or [None]
     if token == "-p":
-        _handle_missing_variables(token_args, out)
+        _handle_print_variables(token_args, out)
     return
 
 
