@@ -159,6 +159,7 @@ def _handle_append_history(file_path: str):
 
 
 def read_history_on_startup():
+    global LAST_APPENDED_HISTORY_INDEX
     history_file = os.getenv("HISTFILE")
     if not history_file:
         return
@@ -259,7 +260,7 @@ def handle_jobs(command: str, args: list[str], out: TextIO, err: TextIO):
 SHELL_VARIABLES = {}
 
 
-def _handle_print_variables(token_args, out: TextIO):
+def _handle_print_variables(token_args, out: TextIO, err: TextIO):
     key, *_ = token_args or [None]
     if not key:
         return
@@ -267,11 +268,29 @@ def _handle_print_variables(token_args, out: TextIO):
     if val:
         print(f'declare -- {key}="{val}"', file=out)
     else:
-        print(f"declare: {key}: not found", file=out)
+        print(f"declare: {key}: not found", file=err)
 
+def _is_key_valid(key: str):
+    if not key:
+        return False
 
-def _handle_store_variable(arg: str):
-    key, val = arg.split("=")
+    first_char = key[0]
+    if not (first_char == "_" or first_char.isalpha()):
+        return False
+
+    for char in key:
+        if not (char == "_" or char.isalpha() or char.isnumeric()):
+            return False
+
+    return True
+
+    
+def _handle_store_variable(arg: str, out: TextIO, err: TextIO):
+    key, val = arg.split("=", 1)
+
+    if not _is_key_valid(key):
+        print(f"declare: `{arg}': not a valid identifier", file=err)
+        return
     SHELL_VARIABLES[key] = val
 
 
@@ -281,11 +300,11 @@ def _is_assigning(args: list[str]):
 
 def handle_declare(command: str, args: list[str], out: TextIO, err: TextIO):
     if _is_assigning(args):
-        _handle_store_variable(args[0])
+        _handle_store_variable(args[0], out, err)
 
     token, *token_args = args or [None]
     if token == "-p":
-        _handle_print_variables(token_args, out)
+        _handle_print_variables(token_args, out, err)
     return
 
 
