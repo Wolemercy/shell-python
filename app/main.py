@@ -148,6 +148,14 @@ def _handle_append_history(file_path: str):
     _write_history_from(file_path, "a", LAST_APPENDED_HISTORY_INDEX + 1)
     LAST_APPENDED_HISTORY_INDEX = readline.get_current_history_length()
     return
+
+def read_history_on_startup():
+    history_file = os.getenv("HISTFILE")
+    if not history_file:
+        return
+    _handle_read_history(history_file)
+    LAST_APPENDED_HISTORY_INDEX = readline.get_current_history_length()
+    return
     
 
 def handle_history(command: str, args: list[str], out: TextIO, err: TextIO):
@@ -455,6 +463,7 @@ def setup():
 def main():
 
     setup()
+    read_history_on_startup()
 
     while True:
         reap_completed_jobs()
