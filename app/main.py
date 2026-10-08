@@ -112,9 +112,14 @@ def handle_complete(command: str, args: list[str], out: TextIO, err: TextIO):
             return
         COMPLETIONS.pop(token_args[0], None)
 
+
 def handle_history(command: str, args: list[str], out: TextIO, err: TextIO):
     history_length = readline.get_current_history_length()
-    for index in range(1, history_length + 1):
+
+    limit = int(args[0]) if len(args) else history_length
+    start_index = max(1, history_length - limit + 1)
+
+    for index in range(start_index, history_length + 1):
         history_item = readline.get_history_item(index)
         print(f"{index:>5}  {history_item}", file=out)
     return
@@ -273,7 +278,7 @@ COMMAND_DISPATCH = {
     "exit": handle_exit,
     "complete": handle_complete,
     "jobs": handle_jobs,
-    "history": handle_history
+    "history": handle_history,
 }
 
 
