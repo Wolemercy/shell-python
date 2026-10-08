@@ -126,6 +126,10 @@ def _handle_list_history(args: list[str], out: TextIO):
 def _handle_read_history(file_path: str):
     readline.read_history_file(file_path)
     return
+
+def _handle_write_history(file_path: str):
+    readline.write_history_file(file_path)
+    return
     
 
 def handle_history(command: str, args: list[str], out: TextIO, err: TextIO):
@@ -137,6 +141,8 @@ def handle_history(command: str, args: list[str], out: TextIO, err: TextIO):
 
     if token == "-r" and token_args:
         _handle_read_history(token_args[0])
+    elif token == "-r" and token_args:
+        _handle_write_history(token_args[0])
     else:
         _handle_list_history(args, out)
     return
