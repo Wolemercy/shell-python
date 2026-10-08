@@ -141,7 +141,7 @@ def handle_history(command: str, args: list[str], out: TextIO, err: TextIO):
 
     if token == "-r" and token_args:
         _handle_read_history(token_args[0])
-    elif token == "-r" and token_args:
+    elif token == "-w" and token_args:
         _handle_write_history(token_args[0])
     else:
         _handle_list_history(args, out)
