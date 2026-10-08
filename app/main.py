@@ -476,7 +476,7 @@ def tokenize(raw_input: str):
             elif char == "$":
                 i, var = _read_variable(raw_input, i + 1)
                 buffer.append(var)
-                in_word = True
+                in_word = True if var else False
             elif char == "\\":
                 buffer.append(raw_input[i+1])
                 in_word = True
