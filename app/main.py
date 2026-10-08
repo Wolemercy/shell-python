@@ -246,8 +246,18 @@ def _report_jobs(out: TextIO, only_done: bool):
 def handle_jobs(command: str, args: list[str], out: TextIO, err: TextIO):
     _report_jobs(out, False)
 
-def handle_declare(command: str, args: list[str], out: TextIO, err: TextIO):
+def _handle_missing_variables(token_args, out: TextIO):
+    variable, *_ = token_args or [None]
+    if variable:
+        print(f"declare: {variable}: not found", file=out)
     pass
+
+def handle_declare(command: str, args: list[str], out: TextIO, err: TextIO):
+    token, *token_args = args or [None]
+
+    if token == "-p":
+        _handle_missing_variables(token_args, out)
+    return
 
 
 def reap_completed_jobs():
