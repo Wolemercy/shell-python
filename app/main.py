@@ -246,6 +246,9 @@ def _report_jobs(out: TextIO, only_done: bool):
 def handle_jobs(command: str, args: list[str], out: TextIO, err: TextIO):
     _report_jobs(out, False)
 
+def handle_declare(command: str, args: list[str], out: TextIO, err: TextIO):
+    pass
+
 
 def reap_completed_jobs():
     _report_jobs(sys.stdout, True)
@@ -334,6 +337,7 @@ COMMAND_DISPATCH = {
     "complete": handle_complete,
     "jobs": handle_jobs,
     "history": handle_history,
+    "declare": handle_declare,
 }
 
 
