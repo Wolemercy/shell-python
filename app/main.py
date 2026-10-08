@@ -124,11 +124,29 @@ def _handle_list_history(args: list[str], out: TextIO):
     return
 
 def _handle_read_history(file_path: str):
-    readline.read_history_file(file_path)
+    with open(file_path, "r") as f:
+        for l in f.readlines():
+            line = l.strip("\n")
+            if not line: continue
+            readline.add_history(line)
     return
 
+def _write_history_from(file_path: str, mode: str, start: int):
+    with open(file_path, mode) as f:
+        for i in range(start, readline.get_current_history_length() + 1):
+            f.write(f"{readline.get_history_item(i)}\n")
+
 def _handle_write_history(file_path: str):
-    readline.write_history_file(file_path)
+    _write_history_from(file_path, "w", 1)
+    return
+
+LAST_APPENDED_HISTORY_INDEX = 0
+
+def _handle_append_history(file_path: str):
+    global LAST_APPENDED_HISTORY_INDEX
+
+    _write_history_from(file_path, "a", LAST_APPENDED_HISTORY_INDEX + 1)
+    LAST_APPENDED_HISTORY_INDEX = readline.get_current_history_length()
     return
     
 
@@ -139,6 +157,8 @@ def handle_history(command: str, args: list[str], out: TextIO, err: TextIO):
         _handle_read_history(token_args[0])
     elif token == "-w" and token_args:
         _handle_write_history(token_args[0])
+    elif token == "-a" and token_args:
+        _handle_append_history(token_args[0])
     else:
         _handle_list_history(args, out)
     return
