@@ -307,6 +307,18 @@ def handle_declare(command: str, args: list[str], out: TextIO, err: TextIO):
         _handle_print_variables(token_args, out, err)
     return
 
+def expand_variables(argv: list[str]) -> list[str]:
+    res = []
+    for arg in argv:
+        if arg.startswith("$"):
+            key = arg[1:]
+            var = SHELL_VARIABLES.get(key, "")
+            res.append(var)
+        else:
+            res.append(arg)
+
+    return res
+
 
 def reap_completed_jobs():
     _report_jobs(sys.stdout, True)
@@ -398,10 +410,86 @@ COMMAND_DISPATCH = {
     "declare": handle_declare,
 }
 
+def _read_variable(raw_input: str, i: int):
+    key = ""
+    open_brace = False
+
+    while i < len(raw_input):
+        char = raw_input[i]
+        if open_brace:
+            if char == "}":
+                i += 1
+                break
+            else:
+                key += char
+        elif char == "{":
+            open_brace = True
+        else:
+            if char == "_" or char.isalpha() or char.isnumeric():
+                key += char
+            else:
+                break
+        i += 1
+
+    return i - 1, SHELL_VARIABLES.get(key, "")
+
 
 def tokenize(raw_input: str):
-    argv = shlex.split(raw_input)
-    return argv
+    tokens=[]
+    buffer = []
+    quote = None
+    in_word = False
+
+    i = 0
+    while i < len(raw_input):
+        char = raw_input[i]
+
+        if quote == "'":
+            if char == "'":
+                quote = None
+            else:
+                buffer.append(char)
+                in_word = True
+        elif quote == '"':
+            if char == "\\":
+                buffer.append(raw_input[i + 1])
+                i += 1
+                in_word = True
+            elif char == "$":
+                i, var = _read_variable(raw_input, i + 1)
+                buffer.append(var)
+                in_word = True
+            elif char == '"':
+                quote = None
+            else:
+                buffer.append(char)
+
+        else:
+            if char == '"' or char == "'":
+                quote = char
+                in_word = True
+            elif char.isspace():
+                if in_word:
+                    tokens.append("".join(buffer))
+                    buffer = []
+                    in_word = False
+            elif char == "$":
+                i, var = _read_variable(raw_input, i + 1)
+                buffer.append(var)
+                in_word = True
+            elif char == "\\":
+                buffer.append(raw_input[i+1])
+                in_word = True
+                i += 1
+            else:
+                buffer.append(char)
+                in_word = True
+        i += 1
+
+    if in_word:
+        tokens.append("".join(buffer))
+
+    return tokens
 
 
 def parse_stage(tokens: list[str]) -> Stage:
