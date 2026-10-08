@@ -39,6 +39,7 @@ def get_cmd_names_in_path(prefix: str) -> set[str]:
 
 
 def handle_exit(command: str, args: list[str], out: TextIO, err: TextIO):
+    write_history_on_exit()
     raise SystemExit()
 
 
@@ -156,7 +157,14 @@ def read_history_on_startup():
     _handle_read_history(history_file)
     LAST_APPENDED_HISTORY_INDEX = readline.get_current_history_length()
     return
-    
+
+def write_history_on_exit():
+    history_file = os.getenv("HISTFILE")
+    if not history_file:
+        return
+    _handle_write_history(history_file)
+    return
+
 
 def handle_history(command: str, args: list[str], out: TextIO, err: TextIO):
     token, *token_args = args or [None]
