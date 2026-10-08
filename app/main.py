@@ -113,6 +113,10 @@ def handle_complete(command: str, args: list[str], out: TextIO, err: TextIO):
         COMPLETIONS.pop(token_args[0], None)
 
 
+def handle_history(command: str, args: list[str], out: TextIO, err: TextIO):
+    pass
+
+
 class JobInfo(TypedDict):
     argv: list[str]
     process: subprocess.Popen
@@ -266,6 +270,7 @@ COMMAND_DISPATCH = {
     "exit": handle_exit,
     "complete": handle_complete,
     "jobs": handle_jobs,
+    "history": handle_history
 }
 
 
