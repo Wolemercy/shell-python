@@ -112,16 +112,33 @@ def handle_complete(command: str, args: list[str], out: TextIO, err: TextIO):
             return
         COMPLETIONS.pop(token_args[0], None)
 
-
-def handle_history(command: str, args: list[str], out: TextIO, err: TextIO):
+def _handle_list_history(args: list[str], out: TextIO):
     history_length = readline.get_current_history_length()
-
+    
     limit = int(args[0]) if len(args) else history_length
     start_index = max(1, history_length - limit + 1)
 
     for index in range(start_index, history_length + 1):
         history_item = readline.get_history_item(index)
         print(f"{index:>5}  {history_item}", file=out)
+    return
+
+def _handle_read_history(file_path: str):
+    readline.read_history_file(file_path)
+    return
+    
+
+def handle_history(command: str, args: list[str], out: TextIO, err: TextIO):
+    token, token_args = None, []
+    if args:
+        token = args[0]
+    if len(args) > 1:
+        token_args = args[1:]
+
+    if token == "-r" and token_args:
+        _handle_read_history(token_args[0])
+    else:
+        _handle_list_history(args, out)
     return
 
 
