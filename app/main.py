@@ -133,11 +133,7 @@ def _handle_write_history(file_path: str):
     
 
 def handle_history(command: str, args: list[str], out: TextIO, err: TextIO):
-    token, token_args = None, []
-    if args:
-        token = args[0]
-    if len(args) > 1:
-        token_args = args[1:]
+    token, *token_args = args or [None]
 
     if token == "-r" and token_args:
         _handle_read_history(token_args[0])
